@@ -601,7 +601,7 @@ class Tank {
         ],
         hull_rect, turret_rect, gun_positions;
     // Polygon for tracks (pygame not pygame zero)
-    screen.draw.polygon(track_positions, this.tank_color);
+    screen.draw.filled_polygon(track_positions, this.tank_color);
 
     // hull uses a rectangle which uses top right co-ords and dimensions
     hull_rect = new Rect([xpos + 15, ypos - 20], [30, 10]);
@@ -611,12 +611,12 @@ class Tank {
     // Despite being an ellipse pygame requires this as a rect
     turret_rect = new Rect([xpos + 20, ypos - 25], [20, 10]);
     // Ellipse for turret (pygame not pygame zero)
-    screen.draw.circle(turret_rect.center, Math.floor(turret_rect.width / 2), this.tank_color);
+    screen.draw.filled_circle(turret_rect.center, Math.floor(turret_rect.width / 2), this.tank_color);
 
     // Gun position involves more complex calculations so in a separate function
     gun_positions = this.calc_gun_positions();
     // Polygon for gun barrel (pygame not pygame zero)
-    screen.draw.polygon(gun_positions, this.tank_color);
+    screen.draw.filled_polygon(gun_positions, this.tank_color);
   }
 
   // Calculate the polygon positions for the gun barrel
@@ -704,7 +704,7 @@ class Shell {
     let [xpos, ypos] = this.current_position,
     // Create rectangle of the shell
         shell_rect = new Rect([Math.floor(xpos), Math.floor(ypos)], [5, 5]);
-    screen.draw.circle(shell_rect.center, Math.floor(shell_rect.width / 2), this.shell_color);
+    screen.draw.filled_circle(shell_rect.center, Math.floor(shell_rect.width / 2), this.shell_color);
   }
 
   update_shell_position(left_right) {
@@ -831,7 +831,7 @@ class Land {
   }
 
   draw(screen) {
-    screen.draw.polygon(this.land_positions, this.ground_color);
+    screen.draw.filled_polygon(this.land_positions, this.ground_color);
   }
 }
 
