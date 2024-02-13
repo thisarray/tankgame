@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>tankgame</title>
+  <script src="../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+
+<main>
+<h1>tankgame</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p>Licensed under <a href="https://www.gnu.org/licenses/">GNU GENERAL PUBLIC LICENSE Version 3</a>.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+import math
+import random
+import pygame
+
+TANK_COLOR_P1 = (216, 216, 153)
+TANK_COLOR_P2 = (219, 163, 82)
+SHELL_COLOR = (255,255,255)
+
+class Tank:
+
+    def __init__(self, left_right, tank_color):
+        self.left_right = left_right
+        self.tank_color = tank_color
+        self.position = (0,0)
+        # Angle that the gun is pointing (degrees relative to horizontal)
+        if (left_right == &quot;left&quot;):
+            self.gun_angle = 20
+        else :
+            self.gun_angle = 50
+        # Amount of power to fire with - is divided by 40 to give scale 10 to 100
+        self.gun_power = 25
+
+    def set_position (self, position):
+        self.position = position
+
+    def get_position (self):
+        return self.position
+
+    def set_gun_angle (self, angle):
+        self.gun_angle = angle
+
+    def change_gun_angle (self, amount):
+        self.gun_angle += amount
+        if self.gun_angle &gt; 85:
+            self.gun_angle = 85
+        if self.gun_angle &lt; 0:
+            self.gun_angle = 0
+
+    def get_gun_angle (self):
+        return self.gun_angle
+
+    def set_gun_power (self, power):
+        self.gun_power = power
+
+    def change_gun_power (self, amount):
+        self.gun_power += amount
+        if self.gun_power &gt; 100:
+            self.gun_power = 100
+        if self.gun_power &lt; 10:
+            self.gun_power = 10
+
+    def get_gun_power (self):
+        return self.gun_power
+
+
+
+    # Draws tank (including gun - which depends upon direction and aim)
+    # self.left_right can be &quot;left&quot; or &quot;right&quot; to depict which position the tank is in
+    # tank_start_pos requires x, y co-ordinates as a tuple
+    # angle is relative to horizontal - in degrees
+    def draw (self, screen):
+        (xpos, ypos) = self.position
+
+        # The shape of the tank track is a polygon
+        # (uses list of tuples for the x and y co-ords)
+        track_positions = [
+            (xpos+5, ypos-5),
+            (xpos+10, ypos-10),
+            (xpos+50, ypos-10),
+            (xpos+55, ypos-5),
+            (xpos+50, ypos),
+            (xpos+10, ypos)
+        ]
+        # Polygon for tracks (pygame not pygame zero)
+        pygame.draw.polygon(screen.surface, self.tank_color, track_positions)
+
+        # hull uses a rectangle which uses top right co-ords and dimensions
+        hull_rect = pygame.Rect((xpos+15,ypos-20),(30,10))
+        # Rectangle for tank body &quot;hull&quot; (pygame zero)
+        screen.draw.filled_rect(hull_rect, self.tank_color)
+
+        # Despite being an ellipse pygame requires this as a rect
+        turret_rect = pygame.Rect((xpos+20,ypos-25),(20,10))
+        # Ellipse for turret (pygame not pygame zero)
+        pygame.draw.ellipse(screen.surface, self.tank_color, turret_rect)
+
+        # Gun position involves more complex calculations so in a separate function
+        gun_positions = self.calc_gun_positions ()
+        # Polygon for gun barrel (pygame not pygame zero)
+        pygame.draw.polygon(screen.surface, self.tank_color, gun_positions)
+
+    # Calculate the polygon positions for the gun barrel
+    def calc_gun_positions (self):
+        (xpos, ypos) = self.position
+        # Set the start of the gun (top of barrel at point it joins the tank)
+        if (self.left_right == &quot;right&quot;):
+            gun_start_pos_top = (xpos+20, ypos-20)
+        else:
+            gun_start_pos_top = (xpos+40, ypos-20)
+
+        # Convert angle to radians (for right subtract from 180 deg first)
+        relative_angle = self.gun_angle
+        if (self.left_right == &quot;right&quot;):
+            relative_angle = 180 - self.gun_angle
+        angle_rads = relative_angle * (math.pi / 180)
+        # Create vector based on the direction of the barrel
+        # Y direction *-1 (due to reverse y of screen)
+        gun_vector =  (math.cos(angle_rads), math.sin(angle_rads) * -1)
+
+        # Determine position bottom of barrel
+        # Create temporary vector 90deg to existing vector
+        if (self.left_right == &quot;right&quot;):
+            temp_angle_rads = math.radians(relative_angle - 90)
+        else:
+            temp_angle_rads = math.radians(relative_angle + 90)
+        temp_vector =  (math.cos(temp_angle_rads), math.sin(temp_angle_rads) * -1)
+
+        # Add constants for gun size
+        GUN_LENGTH = 20
+        GUN_DIAMETER = 3
+        gun_start_pos_bottom = (gun_start_pos_top[0] + temp_vector[0] * GUN_DIAMETER, gun_start_pos_top[1] + temp_vector[1] * GUN_DIAMETER)
+
+        # Calculate barrel positions based on vector from start position
+        gun_positions = [
+            gun_start_pos_bottom,
+            gun_start_pos_top,
+            (gun_start_pos_top[0] + gun_vector[0] * GUN_LENGTH, gun_start_pos_top[1] + gun_vector[1] * GUN_LENGTH),
+            (gun_start_pos_bottom[0] + gun_vector[0] * GUN_LENGTH, gun_start_pos_bottom[1] + gun_vector[1] * GUN_LENGTH),
+        ]
+
+        return gun_positions
+
+class Shell:
+
+    def __init__ (self, shell_color):
+        self.shell_color = shell_color
+        self.start_position = (0,0)
+        self.set_position = (0,0)
+        self.power = 1
+        self.angle = 0
+        self.time = 0
+
+    def set_start_position(self, position):
+        self.start_position = position
+
+    def set_current_position(self, position):
+        self.current_position = position
+
+    def get_current_position(self):
+        return self.current_position
+
+    def set_angle(self, angle):
+        self.angle = angle
+
+    def set_power(self, power):
+        self.power = power
+
+    def set_time(self, time):
+        self.time = time
+
+    def draw (self, screen):
+        (xpos, ypos) = self.current_position
+        # Create rectangle of the shell
+        shell_rect = pygame.Rect((math.floor(xpos),math.floor(ypos)),(5,5))
+        pygame.draw.ellipse(screen.surface, self.shell_color, shell_rect)
+
+    def update_shell_position (self, left_right):
+
+        init_velocity_y = self.power * math.sin(self.angle)
+
+        # Direction - multiply by -1 for left to right
+        if (left_right == &#x27;left&#x27;):
+            init_velocity_x = self.power * math.cos(self.angle)
+        else:
+            init_velocity_x = self.power * math.cos(math.pi - self.angle)
+
+        # Gravity constant is 9.8 m/s^2 but this is in terms of screen so instead use a sensible constant
+        GRAVITY_CONSTANT = 0.004
+        # Constant to give a sensible distance on x axis
+        DISTANCE_CONSTANT = 1.5
+        # Wind is not included in this version, to implement then decreasing wind value is when the wind is against the fire direction
+        # wind &gt; 1 is where wind is against the direction of fire. Wind must never be 0 or negative (which would make it impossible to fire forwards)
+        wind_value = 1
+
+        # time is calculated in update cycles
+        shell_x = self.start_position[0] + init_velocity_x * self.time * DISTANCE_CONSTANT
+        shell_y = self.start_position[1] + -1 * ((init_velocity_y * self.time) - (0.5 * GRAVITY_CONSTANT * self.time * self.time * wind_value))
+
+        self.current_position = (shell_x, shell_y)
+
+        self.time += 1
+
+# Creates the land for the tanks to go on.
+# Also positions the tanks - which can be retrieved using get_tank_position method
+
+# How big a chunk to split up x axis
+LAND_CHUNK_SIZE = 20
+# Max that land can go up or down within chunk size
+LAND_MAX_CHG = 20
+# Max height of ground
+LAND_MIN_Y = 200
+
+class Land:
+
+    def __init__ (self, ground_color, screen_size):
+        self.ground_color = ground_color
+        self.screen_size = screen_size
+
+        # Setup landscape (these positions represent left side of platform)
+        # Choose a random position (temp values - to be stored in tank object)
+        # The complete x,y co-ordinates will be saved in a tuple in left_tank_rect and right_tank_rect
+        left_tank_x_position = random.randint (10,300)
+        right_tank_x_position = random.randint (500,750)
+
+        # Sub divide screen into chunks for the landscape
+        # store as list of x positions (0 is first position)
+        current_land_x = 0
+        current_land_y = random.randint (300,400)
+        self.land_positions = [(current_land_x,current_land_y)]
+        while (current_land_x &lt; self.screen_size[0]):
+            if (current_land_x == left_tank_x_position):
+                # handle tank platform
+                self.tank1_position = (current_land_x, current_land_y)
+                # Add another 50 pixels further along at same y position (level ground for tank to sit on)
+                current_land_x += 60
+                self.land_positions.append((current_land_x, current_land_y))
+                continue
+            elif (current_land_x == right_tank_x_position):
+                # handle tank platform
+                self.tank2_position = (current_land_x, current_land_y)
+                # Add another 50 pixels further along at same y position (level ground for tank to sit on)
+                current_land_x += 60
+                self.land_positions.append((current_land_x, current_land_y))
+                continue
+            # Checks to see if next position will be where the tanks are
+            if (current_land_x &lt; left_tank_x_position and current_land_x + LAND_CHUNK_SIZE &gt;= left_tank_x_position):
+                # set x position to tank position
+                current_land_x = left_tank_x_position
+            elif (current_land_x &lt; right_tank_x_position and current_land_x + LAND_CHUNK_SIZE &gt;= right_tank_x_position):
+                # set x position to tank position
+                current_land_x = right_tank_x_position
+            elif (current_land_x + LAND_CHUNK_SIZE &gt; self.screen_size[0]):
+                current_land_x = self.screen_size[0]
+            else:
+                current_land_x += LAND_CHUNK_SIZE
+            # Set the y height
+            current_land_y += random.randint(0-LAND_MAX_CHG,LAND_MAX_CHG)
+            # check not too high or too lower (note the reverse logic as high y is bottom of screen)
+            if (current_land_y &gt; self.screen_size[1]):   # Bottom of screen
+                current_land_y = self.screen_size[1]
+            if (current_land_y &lt; LAND_MIN_Y):
+                current_land_y = LAND_MIN_Y
+            # Add to list
+            self.land_positions.append((current_land_x, current_land_y))
+        # Add end corners
+        self.land_positions.append((self.screen_size[0],self.screen_size[1]))
+        self.land_positions.append((0,self.screen_size[1]))
+
+    def get_tank1_position(self):
+        return self.tank1_position
+
+    def get_tank2_position(self):
+        return self.tank2_position
+
+
+
+    def draw (self, screen):
+        pygame.draw.polygon(screen.surface, self.ground_color, self.land_positions)
+
+WIDTH=800
+HEIGHT=600
+
+# States are:
+# start - timed delay before start
+# player1 - waiting for player to set position
+# player1fire - player 1 fired
+# player2 - player 2 set position
+# player2fire - player 2 fired
+# game_over_1 / game_over_2 - show who won 1 = player 1 won etc.
+game_state = &quot;player1&quot;
+
+# Colour constants
+SKY_COLOR = (165, 182, 209)
+SKY_COLOR = (165, 182, 209)
+GROUND_COLOR = (9,84,5)
+# Different tank colors for player 1 and player 2
+# These colors must be unique as well as the GROUND_COLOR
+TANK_COLOR_P1 = (216, 216, 153)
+TANK_COLOR_P2 = (219, 163, 82)
+SHELL_COLOR = (255,255,255)
+TEXT_COLOR = (255,255,255)
+
+# Timer used to create delays before action (prevent accidental button press)
+game_timer = 0
+
+# Tank 1 = Left
+tank1 = Tank(&quot;left&quot;, TANK_COLOR_P1)
+# Tank 2 = Right
+tank2 = Tank(&quot;right&quot;, TANK_COLOR_P2)
+
+# Only fire one shell at a time, a single shell object can be used for both player 1 and player 2
+shell = Shell(SHELL_COLOR)
+
+ground = Land(GROUND_COLOR, (WIDTH, HEIGHT))
+
+# Get positions of tanks from ground generator
+tank1.set_position(ground.get_tank1_position())
+tank2.set_position(ground.get_tank2_position())
+
+def draw():
+    global game_state
+    screen.fill(SKY_COLOR)
+    ground.draw(screen)
+    tank1.draw (screen)
+    tank2.draw (screen)
+    if (game_state == &quot;player1&quot; or game_state == &quot;player1fire&quot;):
+        screen.draw.text(&quot;Player 1\nPower &quot;+str(tank1.get_gun_power())+&quot;%&quot;, fontsize=30, topleft=(50,50), color=(TEXT_COLOR))
+    if (game_state == &quot;player2&quot; or game_state == &quot;player2fire&quot;):
+        screen.draw.text(&quot;Player 2\nPower &quot;+str(tank2.get_gun_power())+&quot;%&quot;, fontsize=30, topright=(WIDTH-50,50), color=(TEXT_COLOR))
+    if (game_state == &quot;player1fire&quot; or game_state == &quot;player2fire&quot;):
+        shell.draw(screen)
+    if (game_state == &quot;game_over_1&quot;):
+        screen.draw.text(&quot;Game Over\nPlayer 1 wins!&quot;, fontsize=60, center=(WIDTH/2,200), color=(TEXT_COLOR))
+    if (game_state == &quot;game_over_2&quot;):
+        screen.draw.text(&quot;Game Over\nPlayer 2 wins!&quot;, fontsize=60, center=(WIDTH/2,200), color=(TEXT_COLOR))
+
+def update():
+    global game_state, game_timer
+    # Delayed start (prevent accidental firing by holding start button down)
+    if (game_state == &#x27;start&#x27;):
+        game_timer += 1
+        if (game_timer == 30):
+            game_timer = 0
+            game_state = &#x27;player1&#x27;
+    # Only read keyboard in certain states
+    if (game_state == &#x27;player1&#x27;):
+        player1_fired = player_keyboard(&quot;left&quot;)
+        if (player1_fired == True):
+            # Set shell position to end of gun
+            # Use gun_positions so we can get start position
+            gun_positions = tank1.calc_gun_positions ()
+            shell.set_start_position(gun_positions[3])
+            shell.set_current_position(gun_positions[3])
+            game_state = &#x27;player1fire&#x27;
+            shell.set_angle(math.radians (tank1.get_gun_angle()))
+            shell.set_power(tank1.get_gun_power() / 40)
+            shell.set_time(0)
+    if (game_state == &#x27;player1fire&#x27;):
+        shell.update_shell_position (&quot;left&quot;)
+        # shell value is whether the shell is inflight, hit or missed
+        shell_value = detect_hit(&quot;left&quot;)
+        # shell_value 20 is if other tank hit
+        if (shell_value &gt;= 20):
+            game_state = &#x27;game_over_1&#x27;
+        # 10 is offscreen and 11 is hit ground, both indicate missed
+        elif (shell_value &gt;= 10):
+            game_state = &#x27;player2&#x27;
+    if (game_state == &#x27;player2&#x27;):
+        player2_fired = player_keyboard(&quot;right&quot;)
+        if (player2_fired == True):
+            # Set shell position to end of gun
+            # Use gun_positions so we can get start position
+            gun_positions = tank2.calc_gun_positions ()
+            shell.set_start_position(gun_positions[3])
+            shell.set_current_position(gun_positions[3])
+            game_state = &#x27;player2fire&#x27;
+            shell.set_angle(math.radians (tank2.get_gun_angle()))
+            shell.set_power(tank2.get_gun_power() / 40)
+            shell.set_time(0)
+    if (game_state == &#x27;player2fire&#x27;):
+        shell.update_shell_position (&quot;right&quot;)
+        # shell value is whether the shell is inflight, hit or missed
+        shell_value = detect_hit(&quot;right&quot;)
+        # shell_value 20 is if other tank hit
+        if (shell_value &gt;= 20):
+            game_state = &#x27;game_over_2&#x27;
+        # 10 is offscreen and 11 is hit ground, both indicate missed
+        elif (shell_value &gt;= 10):
+            game_state = &#x27;player1&#x27;
+    if (game_state == &#x27;game_over_1&#x27; or game_state == &#x27;game_over_2&#x27;):
+        # Allow space key or left-shift (picade) to continue
+        if (keyboard.space or keyboard.lshift):
+            game_state = &#x27;start&#x27;
+            # Reset position of tanks and terrain
+            setup()
+
+
+
+
+# Detects if the shell has hit something.
+# Simple detection looks at colour of the screen at the position
+# uses an offset to not detect the actual shell
+# Return 0 for in-flight,
+# 1 for offscreen temp (too high),
+# 10 for offscreen permanent (too far),
+# 11 for hit ground,
+# 20 for hit other tank
+def detect_hit (left_right):
+    (shell_x, shell_y) = shell.get_current_position()
+    # Add offset (3 pixels)
+    # offset left/right depending upon direction of fire
+    if (left_right == &quot;left&quot;):
+        shell_x += 3
+    else:
+        shell_x -= 3
+    shell_y += 3
+    offset_position = (math.floor(shell_x), math.floor(shell_y))
+
+    # Check whether it&#x27;s off the screen
+    # temporary if just y axis, permanent if x
+    if (shell_x &gt; WIDTH or shell_x &lt;= 0 or shell_y &gt;= HEIGHT):
+        return 10
+    if (shell_y &lt; 1):
+        return 1
+
+    # Get colour at position
+    color_pixel = screen.surface.get_at(offset_position)
+    if (color_pixel == GROUND_COLOR):
+        return 11
+    if (left_right == &#x27;left&#x27; and color_pixel == TANK_COLOR_P2):
+        return 20
+    if (left_right == &#x27;right&#x27; and color_pixel == TANK_COLOR_P1):
+        return 20
+
+    return 0
+
+# Handles keyboard for players
+# If player has hit fire key (space) then returns True
+# Otherwise changes angle of gun if applicable and returns False
+def player_keyboard(left_right):
+    global shell_start_position
+
+    # get current angle
+    if (left_right == &#x27;left&#x27;):
+        this_gun_angle = tank1.get_gun_angle()
+        this_gun_power = tank1.get_gun_power()
+    else:
+        this_gun_angle = tank2.get_gun_angle()
+        this_gun_power = tank2.get_gun_power()
+
+    # Allow space key or left-shift (picade) to fire
+    if (keyboard.space or keyboard.lshift):
+        return True
+    # Up moves firing angle upwards, down moves it down
+    if (keyboard.up):
+        if (left_right == &#x27;left&#x27;):
+            tank1.change_gun_angle(1)
+        else:
+            tank2.change_gun_angle(1)
+    if (keyboard.down):
+        if (left_right == &#x27;left&#x27;):
+            tank1.change_gun_angle(-1)
+        else:
+            tank2.change_gun_angle(-1)
+    # left reduces power, right increases power
+    if (keyboard.right):
+        if (left_right == &#x27;left&#x27;):
+            tank1.change_gun_power(1)
+        else:
+            tank2.change_gun_power(1)
+    if (keyboard.left):
+        if (left_right == &#x27;left&#x27;):
+            tank1.change_gun_power(-1)
+        else:
+            tank2.change_gun_power(-1)
+
+    return False
+</code></pre>
+</main>
+
+<script>
+/*
+ * Return a random integer N such that min <= N < max.
+ */
+function getRandomInteger(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor((Math.random() * (max - min)) + min);
+}
+
+class Tank {
+  constructor(left_right, tank_color) {
+    this.left_right = left_right;
+    this.tank_color = tank_color.slice();
+    this.position = [0, 0];
+    // Angle that the gun is pointing (degrees relative to horizontal)
+    if (left_right === "left") {
+      this.gun_angle = 20;
+    }
+    else {
+      this.gun_angle = 50;
+    }
+    // Amount of power to fire with - is divided by 40 to give scale 10 to 100
+    this.gun_power = 25;
+
+    this.calc_shell_trajectory();
+  }
+
+  set_position(position) {
+    this.position = position.slice();
+    this.calc_shell_trajectory();
+  }
+
+  get_position() {
+    return this.position.slice();
+  }
+
+  set_gun_angle(angle) {
+    this.gun_angle = angle;
+  }
+
+  change_gun_angle(amount) {
+    this.gun_angle += amount;
+    if (this.gun_angle > 85) {
+      this.gun_angle = 85;
+    }
+    if (this.gun_angle < 0) {
+      this.gun_angle = 0;
+    }
+    this.calc_shell_trajectory();
+  }
+
+  get_gun_angle() {
+    return this.gun_angle;
+  }
+
+  set_gun_power(power) {
+    this.gun_power = power;
+  }
+
+  change_gun_power(amount) {
+    this.gun_power += amount;
+    if (this.gun_power > 100) {
+      this.gun_power = 100;
+    }
+    if (this.gun_power < 10) {
+      this.gun_power = 10;
+    }
+    this.calc_shell_trajectory();
+  }
+
+  get_gun_power() {
+    return this.gun_power;
+  }
+
+  /*
+   * Draws tank (including gun - which depends upon direction and aim)
+   * self.left_right can be "left" or "right" to depict which position the tank is in
+   * tank_start_pos requires x, y co-ordinates as a tuple
+   * angle is relative to horizontal - in degrees
+   */
+  draw(screen) {
+    let [xpos, ypos] = this.position,
+
+        // The shape of the tank track is a polygon
+        // (uses list of tuples for the x and y co-ords)
+        track_positions = [
+          [xpos + 5, ypos - 5],
+          [xpos + 10, ypos - 10],
+          [xpos + 50, ypos - 10],
+          [xpos + 55, ypos - 5],
+          [xpos + 50, ypos],
+          [xpos + 10, ypos]
+        ],
+        hull_rect, turret_rect, gun_positions;
+    // Polygon for tracks (pygame not pygame zero)
+    screen.draw.filled_polygon(track_positions, this.tank_color);
+
+    // hull uses a rectangle which uses top right co-ords and dimensions
+    hull_rect = new Rect([xpos + 15, ypos - 20], [30, 10]);
+    // Rectangle for tank body "hull" (pygame zero)
+    screen.draw.filled_rect(hull_rect, this.tank_color);
+
+    // Despite being an ellipse pygame requires this as a rect
+    turret_rect = new Rect([xpos + 20, ypos - 25], [20, 10]);
+    // Ellipse for turret (pygame not pygame zero)
+    screen.draw.filled_circle(turret_rect.center, Math.floor(turret_rect.width / 2), this.tank_color);
+
+    // Gun position involves more complex calculations so in a separate function
+    gun_positions = this.calc_gun_positions();
+    // Polygon for gun barrel (pygame not pygame zero)
+    screen.draw.filled_polygon(gun_positions, this.tank_color);
+
+    for (let i = 1; i < this.trajectory.length; i++) {
+      screen.draw.line(this.trajectory[i-1], this.trajectory[i], this.tank_color);
+    }
+  }
+
+  // Calculate the polygon positions for the gun barrel
+  calc_gun_positions() {
+    let [xpos, ypos] = this.position,
+        gun_start_pos_top, relative_angle, angle_rads, gun_vector, temp_angle_rads, temp_vector, gun_start_pos_bottom;
+    // Set the start of the gun (top of barrel at point it joins the tank)
+    if (this.left_right === "right") {
+      gun_start_pos_top = [xpos + 20, ypos - 20];
+    }
+    else {
+      gun_start_pos_top = [xpos + 40, ypos - 20];
+    }
+
+    // Convert angle to radians (for right subtract from 180 deg first)
+    relative_angle = this.gun_angle;
+    if (this.left_right === "right") {
+      relative_angle = 180 - this.gun_angle;
+    }
+    angle_rads = relative_angle * (Math.PI / 180);
+    // Create vector based on the direction of the barrel
+    // Y direction *-1 (due to reverse y of screen)
+    gun_vector = [Math.cos(angle_rads), Math.sin(angle_rads) * -1];
+
+    // Determine position bottom of barrel
+    // Create temporary vector 90deg to existing vector
+    if (this.left_right === "right") {
+      temp_angle_rads = (relative_angle - 90) * Math.PI / 180;
+    }
+    else {
+      temp_angle_rads = (relative_angle + 90) * Math.PI / 180;
+    }
+    temp_vector = [Math.cos(temp_angle_rads), Math.sin(temp_angle_rads) * -1];
+
+    // Add constants for gun size
+    const GUN_LENGTH = 20;
+    const GUN_DIAMETER = 3;
+    gun_start_pos_bottom = [gun_start_pos_top[0] + (temp_vector[0] * GUN_DIAMETER), gun_start_pos_top[1] + (temp_vector[1] * GUN_DIAMETER)];
+
+    // Calculate barrel positions based on vector from start position
+    return [
+      gun_start_pos_bottom,
+      gun_start_pos_top,
+      [gun_start_pos_top[0] + (gun_vector[0] * GUN_LENGTH), gun_start_pos_top[1] + (gun_vector[1] * GUN_LENGTH)],
+      [gun_start_pos_bottom[0] + (gun_vector[0] * GUN_LENGTH), gun_start_pos_bottom[1] + (gun_vector[1] * GUN_LENGTH)]
+    ];
+  }
+
+  calc_shell_trajectory() {
+    let shell = new Shell(this.tank_color),
+        gun_positions = this.calc_gun_positions(),
+        position;
+
+    // Set shell position to end of gun
+    // Use gun_positions so we can get start position
+    shell.set_start_position(gun_positions[3]);
+    shell.set_current_position(gun_positions[3]);
+    shell.set_angle(this.get_gun_angle() * Math.PI / 180);
+    shell.set_power(this.get_gun_power() / 40);
+    shell.set_time(0);
+
+    this.trajectory = [];
+    position = shell.get_current_position();
+    while ((0 <= position[0]) && (position[0] < WIDTH) && (0 <= position[1]) && (position[1] < HEIGHT)) {
+      this.trajectory.push(position);
+      shell.update_shell_position(this.left_right);
+      position = shell.get_current_position();
+    }
+  }
+}
+
+class Shell {
+  constructor(shell_color) {
+    this.shell_color = shell_color.slice();
+    this.start_position = [0, 0];
+    this.set_position = [0, 0];
+    this.power = 1;
+    this.angle = 0;
+    this.time = 0;
+  }
+
+  set_start_position(position) {
+    this.start_position = position.slice();
+  }
+
+  set_current_position(position) {
+    this.current_position = position.slice();
+  }
+
+  get_current_position() {
+    return this.current_position.slice();
+  }
+
+  set_angle(angle) {
+    this.angle = angle;
+  }
+
+  set_power(power) {
+    this.power = power;
+  }
+
+  set_time(time) {
+    this.time = time;
+  }
+
+  draw(screen) {
+    let [xpos, ypos] = this.current_position,
+    // Create rectangle of the shell
+        shell_rect = new Rect([Math.floor(xpos), Math.floor(ypos)], [5, 5]);
+    screen.draw.filled_circle(shell_rect.center, Math.floor(shell_rect.width / 2), this.shell_color);
+  }
+
+  update_shell_position(left_right) {
+    let init_velocity_y = this.power * Math.sin(this.angle),
+        init_velocity_x, wind_value, shell_x, shell_y;
+
+    // Direction - multiply by -1 for left to right
+    if (left_right === 'left') {
+      init_velocity_x = this.power * Math.cos(this.angle);
+    }
+    else {
+      init_velocity_x = this.power * Math.cos(Math.PI - this.angle);
+    }
+
+    // Gravity constant is 9.8 m/s^2 but this is in terms of screen so instead use a sensible constant
+    const GRAVITY_CONSTANT = 0.004;
+    // Constant to give a sensible distance on x axis
+    const DISTANCE_CONSTANT = 1.5;
+    // Wind is not included in this version, to implement then decreasing wind value is when the wind is against the fire direction
+    // wind > 1 is where wind is against the direction of fire. Wind must never be 0 or negative (which would make it impossible to fire forwards)
+    wind_value = 1;
+
+    // time is calculated in update cycles
+    shell_x = this.start_position[0] + (init_velocity_x * this.time * DISTANCE_CONSTANT);
+    shell_y = this.start_position[1] + (-1 * ((init_velocity_y * this.time) - (0.5 * GRAVITY_CONSTANT * this.time * this.time * wind_value)));
+
+    this.current_position = [shell_x, shell_y];
+
+    this.time += 1;
+  }
+}
+
+/*
+ * Creates the land for the tanks to go on.
+ * Also positions the tanks - which can be retrieved using get_tank_position method
+ */
+
+/*
+ * How big a chunk to split up x axis
+ */
+const LAND_CHUNK_SIZE = 20;
+
+/*
+ * Max that land can go up or down within chunk size
+ */
+const LAND_MAX_CHG = 20;
+
+/*
+ * Max height of ground
+ */
+const LAND_MIN_Y = 200;
+
+class Land {
+  constructor(ground_color, screen_size) {
+    this.ground_color = ground_color.slice();
+    this.screen_size = screen_size.slice();
+
+    // Setup landscape (these positions represent left side of platform)
+    // Choose a random position (temp values - to be stored in tank object)
+    // The complete x,y co-ordinates will be saved in a tuple in left_tank_rect and right_tank_rect
+    let left_tank_x_position = getRandomInteger(10, 301),
+        right_tank_x_position = getRandomInteger(500, 751),
+
+    // Sub divide screen into chunks for the landscape
+    // store as list of x positions (0 is first position)
+        current_land_x = 0,
+        current_land_y = getRandomInteger(300, 401);
+    this.land_positions = [[current_land_x, current_land_y]];
+    while (current_land_x < this.screen_size[0]) {
+      if (current_land_x === left_tank_x_position) {
+        // handle tank platform
+        this.tank1_position = [current_land_x, current_land_y];
+        // Add another 50 pixels further along at same y position (level ground for tank to sit on)
+        current_land_x += 60;
+        this.land_positions.push([current_land_x, current_land_y]);
+        continue;
+      }
+      else if (current_land_x === right_tank_x_position) {
+        // handle tank platform
+        this.tank2_position = [current_land_x, current_land_y];
+        // Add another 50 pixels further along at same y position (level ground for tank to sit on)
+        current_land_x += 60;
+        this.land_positions.push([current_land_x, current_land_y]);
+        continue;
+      }
+      // Checks to see if next position will be where the tanks are
+      if ((current_land_x < left_tank_x_position) && ((current_land_x + LAND_CHUNK_SIZE) >= left_tank_x_position)) {
+        // set x position to tank position
+        current_land_x = left_tank_x_position;
+      }
+      else if ((current_land_x < right_tank_x_position) && ((current_land_x + LAND_CHUNK_SIZE) >= right_tank_x_position)) {
+        // set x position to tank position
+        current_land_x = right_tank_x_position;
+      }
+      else if ((current_land_x + LAND_CHUNK_SIZE) > this.screen_size[0]) {
+        current_land_x = this.screen_size[0];
+      }
+      else {
+        current_land_x += LAND_CHUNK_SIZE;
+      }
+      // Set the y height
+      current_land_y += getRandomInteger(0 - LAND_MAX_CHG, LAND_MAX_CHG + 1);
+      // check not too high or too lower (note the reverse logic as high y is bottom of screen)
+      if (current_land_y > this.screen_size[1]) {   // Bottom of screen
+        current_land_y = this.screen_size[1];
+      }
+      if (current_land_y < LAND_MIN_Y) {
+        current_land_y = LAND_MIN_Y;
+      }
+      // Add to list
+      this.land_positions.push([current_land_x, current_land_y]);
+    }
+    // Add end corners
+    this.land_positions.push([this.screen_size[0], this.screen_size[1]]);
+    this.land_positions.push([0, this.screen_size[1]]);
+  }
+
+  get_tank1_position() {
+    return this.tank1_position.slice();
+  }
+
+  get_tank2_position() {
+    return this.tank2_position.slice();
+  }
+
+  draw(screen) {
+    screen.draw.filled_polygon(this.land_positions, this.ground_color);
+  }
+}
+
+WIDTH = 800;
+HEIGHT = 600;
+
+/*
+ * States are:
+ * start - timed delay before start
+ * player1 - waiting for player to set position
+ * player1fire - player 1 fired
+ * player2 - player 2 set position
+ * player2fire - player 2 fired
+ * game_over_1 / game_over_2 - show who won 1 = player 1 won etc.
+ */
+
+/*
+ * Colour constants
+ */
+const SKY_COLOR = [165, 182, 209];
+const GROUND_COLOR = [9, 84, 5];
+// Different tank colors for player 1 and player 2
+// These colors must be unique as well as the GROUND_COLOR
+const TANK_COLOR_P1 = [216, 216, 153];
+const TANK_COLOR_P2 = [219, 163, 82];
+const SHELL_COLOR = [255, 255, 255];
+const TEXT_COLOR = [255, 255, 255];
+
+let game_state, game_timer, tank1, tank2, shell, ground;
+
+function reset() {
+  game_state = "player1";
+
+  // Timer used to create delays before action (prevent accidental button press)
+  game_timer = 0;
+
+  // Tank 1 = Left
+  tank1 = new Tank("left", TANK_COLOR_P1);
+  // Tank 2 = Right
+  tank2 = new Tank("right", TANK_COLOR_P2);
+
+  // Only fire one shell at a time, a single shell object can be used for both player 1 and player 2
+  shell = new Shell(SHELL_COLOR);
+
+  ground = new Land(GROUND_COLOR, [WIDTH, HEIGHT]);
+
+  // Get positions of tanks from ground generator
+  tank1.set_position(ground.get_tank1_position());
+  tank2.set_position(ground.get_tank2_position());
+}
+
+function draw() {
+  screen.fill(SKY_COLOR);
+  ground.draw(screen);
+  tank1.draw(screen);
+  tank2.draw(screen);
+  if ((game_state === "player1") || (game_state === "player1fire")) {
+    screen.draw.text("Player 1\nPower " + tank1.get_gun_power() + "%", {
+      fontsize: 30,
+      topleft: [50, 50],
+      color: TEXT_COLOR
+    });
+  }
+  if ((game_state === "player2") || (game_state === "player2fire")) {
+    screen.draw.text("Player 2\nPower " + tank2.get_gun_power() + "%", {
+      fontsize: 30,
+      topright: [WIDTH - 50, 50],
+      color: TEXT_COLOR
+    });
+  }
+  if ((game_state === "player1fire") || (game_state === "player2fire")) {
+    shell.draw(screen);
+  }
+  if (game_state === "game_over_1") {
+    screen.draw.text("Game Over\nPlayer 1 wins!", {
+      fontsize: 60,
+      center: [WIDTH / 2, 200],
+      color: TEXT_COLOR
+    });
+  }
+  if (game_state === "game_over_2") {
+    screen.draw.text("Game Over\nPlayer 2 wins!", {
+      fontsize: 60,
+      center: [WIDTH / 2, 200],
+      color: TEXT_COLOR
+    });
+  }
+}
+
+function update() {
+  // Delayed start (prevent accidental firing by holding start button down)
+  if (game_state === 'start') {
+    game_timer += 1;
+    if (game_timer === 30) {
+      game_timer = 0;
+      game_state = 'player1';
+    }
+  }
+  // Only read keyboard in certain states
+  if (game_state === 'player1') {
+    if (player_keyboard("left")) {
+      // Set shell position to end of gun
+      // Use gun_positions so we can get start position
+      let gun_positions = tank1.calc_gun_positions();
+      shell.set_start_position(gun_positions[3]);
+      shell.set_current_position(gun_positions[3]);
+      game_state = 'player1fire';
+      shell.set_angle(tank1.get_gun_angle() * Math.PI / 180);
+      shell.set_power(tank1.get_gun_power() / 40);
+      shell.set_time(0);
+    }
+  }
+  if (game_state === 'player1fire') {
+    shell.update_shell_position("left");
+    // shell value is whether the shell is inflight, hit or missed
+    let shell_value = detect_hit("left");
+    // shell_value 20 is if other tank hit
+    if (shell_value >= 20) {
+      game_state = 'game_over_1';
+    }
+    // 10 is offscreen and 11 is hit ground, both indicate missed
+    else if (shell_value >= 10) {
+      game_state = 'player2';
+    }
+  }
+  if (game_state === 'player2') {
+    if (player_keyboard("right")) {
+      // Set shell position to end of gun
+      // Use gun_positions so we can get start position
+      let gun_positions = tank2.calc_gun_positions();
+      shell.set_start_position(gun_positions[3]);
+      shell.set_current_position(gun_positions[3]);
+      game_state = 'player2fire';
+      shell.set_angle(tank2.get_gun_angle() * Math.PI / 180);
+      shell.set_power(tank2.get_gun_power() / 40);
+      shell.set_time(0);
+    }
+  }
+  if (game_state === 'player2fire') {
+    shell.update_shell_position("right");
+    // shell value is whether the shell is inflight, hit or missed
+    let shell_value = detect_hit("right");
+    // shell_value 20 is if other tank hit
+    if (shell_value >= 20) {
+      game_state = 'game_over_2';
+    }
+    // 10 is offscreen and 11 is hit ground, both indicate missed
+    else if (shell_value >= 10) {
+      game_state = 'player1';
+    }
+  }
+  if ((game_state === "game_over_1") || (game_state === "game_over_2")) {
+    // Allow space key or left-shift (picade) to continue
+    if (keyboard[keys.SPACE] || keyboard[keys.LSHIFT]) {
+      game_state = 'start';
+      // Reset position of tanks and terrain
+      reset();
+    }
+  }
+}
+
+/*
+ * Detects if the shell has hit something.
+ * Simple detection looks at colour of the screen at the position
+ * uses an offset to not detect the actual shell
+ * Return 0 for in-flight,
+ * 1 for offscreen temp (too high),
+ * 10 for offscreen permanent (too far),
+ * 11 for hit ground,
+ * 20 for hit other tank
+ */
+function detect_hit(left_right) {
+  let [shell_x, shell_y] = shell.get_current_position(),
+      offset_position, color_pixel;
+  // Add offset (3 pixels)
+  // offset left/right depending upon direction of fire
+  if (left_right === "left") {
+    shell_x += 3;
+  }
+  else {
+    shell_x -= 3;
+  }
+  shell_y += 3;
+  offset_position = [Math.floor(shell_x), Math.floor(shell_y)];
+
+  // Check whether it's off the screen
+  // temporary if just y axis, permanent if x
+  if ((shell_x > WIDTH) || (shell_x <= 0) || (shell_y >= HEIGHT)) {
+    return 10;
+  }
+  if (shell_y < 1) {
+    return 1;
+  }
+
+  // Get colour at position
+  color_pixel = screen.getSurface().getAt(offset_position[0], offset_position[1]);
+  if (Surface.isColorEqual(color_pixel, GROUND_COLOR)) {
+    return 11;
+  }
+  if ((left_right === 'left') && Surface.isColorEqual(color_pixel, TANK_COLOR_P2)) {
+    return 20;
+  }
+  if ((left_right === 'right') && Surface.isColorEqual(color_pixel, TANK_COLOR_P1)) {
+    return 20;
+  }
+
+  return 0;
+}
+
+/*
+ * Handles keyboard for players
+ * If player has hit fire key (space) then returns True
+ * Otherwise changes angle of gun if applicable and returns False
+ */
+function player_keyboard(left_right) {
+  let this_gun_angle = tank2.get_gun_angle(),
+      this_gun_power = tank2.get_gun_power();
+  // get current angle
+  if (left_right === 'left') {
+    this_gun_angle = tank1.get_gun_angle();
+    this_gun_power = tank1.get_gun_power();
+  }
+  else {
+    this_gun_angle = tank2.get_gun_angle();
+    this_gun_power = tank2.get_gun_power();
+  }
+
+  // Allow space key or left-shift (picade) to fire
+  if (keyboard[keys.SPACE] || keyboard[keys.LSHIFT]) {
+    return true;
+  }
+  // Up moves firing angle upwards, down moves it down
+  if (keyboard[keys.UP]) {
+    if (left_right === 'left') {
+      tank1.change_gun_angle(1);
+    }
+    else {
+      tank2.change_gun_angle(1);
+    }
+  }
+  if (keyboard[keys.DOWN]) {
+    if (left_right === 'left') {
+      tank1.change_gun_angle(-1);
+    }
+    else {
+      tank2.change_gun_angle(-1);
+    }
+  }
+  // left reduces power, right increases power
+  if (keyboard[keys.RIGHT]) {
+    if (left_right === 'left') {
+      tank1.change_gun_power(1);
+    }
+    else {
+      tank2.change_gun_power(1);
+    }
+  }
+  if (keyboard[keys.LEFT]) {
+    if (left_right === 'left') {
+      tank1.change_gun_power(-1);
+    }
+    else {
+      tank2.change_gun_power(-1);
+    }
+  }
+
+  return false;
+}
+
+window.addEventListener('load', (event) => {
+  screen.init();
+});
+</script>
+</body>
+
+</html>
